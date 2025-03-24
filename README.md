@@ -1,3 +1,9 @@
+---
+title: test
+app_file: app.py
+sdk: gradio
+sdk_version: 5.22.0
+---
 # 🧠 Gradio LLM Local Project
 
 This project uses Gradio to build local user interfaces for LLMs like those run in LM Studio or Ollama.
