@@ -75,7 +75,7 @@ def build_ui() -> gr.Blocks:
                     )
                     refresh_button = gr.Button("🔄 Refresh Models")
             with gr.Column(scale=3):
-                chatbot = gr.Chatbot(label="Chat")
+                chatbot = gr.Chatbot(label="Chat", type="messages")
                 user_message = gr.Textbox(placeholder="Say something", label="Your Message")
 
         state = gr.State([])
