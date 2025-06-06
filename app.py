@@ -1,37 +1,27 @@
 import os
-import time
-import asyncio
 import httpx
 import gradio as gr
-from openai import AsyncOpenAI
+from openai import OpenAI
 
-"""Optimized asynchronous chat interface for local LLMs via LM Studio."""
+"""Simplified chat interface for local LLMs via LM Studio."""
 
 BASE_URL = os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1")
 API_KEY = os.getenv("LM_STUDIO_KEY", "lm-studio")
 
-client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
-
-_MODELS_CACHE = {"timestamp": 0.0, "models": []}
+client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
 
 
-async def fetch_models() -> list[str]:
-    """Fetch available model IDs with simple caching."""
-    if time.time() - _MODELS_CACHE["timestamp"] < 60:
-        return _MODELS_CACHE["models"]
+def fetch_models() -> list[str]:
+    """Return available model IDs or an error message list."""
     try:
-        async with httpx.AsyncClient(timeout=10) as http_client:
-            response = await http_client.get(f"{BASE_URL}/models")
-            response.raise_for_status()
-            models = [m["id"] for m in response.json().get("data", [])]
+        response = httpx.get(f"{BASE_URL}/models", timeout=5)
+        response.raise_for_status()
+        return [m["id"] for m in response.json().get("data", [])]
     except Exception as exc:  # noqa: BLE001
-        models = [f"⚠️ Error fetching models: {exc}"]
-    _MODELS_CACHE["timestamp"] = time.time()
-    _MODELS_CACHE["models"] = models
-    return models
+        return [f"⚠️ Error fetching models: {exc}"]
 
 
-async def generate_chat(user_msg, history, model_id, temperature, max_tokens, system_prompt):
+def generate_chat(user_msg, history, model_id, temperature, max_tokens, system_prompt):
     """Generate a response from the model and update history."""
     if not any(msg.get("role") == "system" for msg in history):
         history.insert(0, {"role": "system", "content": system_prompt})
@@ -39,7 +29,7 @@ async def generate_chat(user_msg, history, model_id, temperature, max_tokens, sy
     history.append({"role": "user", "content": user_msg})
 
     try:
-        response = await client.chat.completions.create(
+        response = client.chat.completions.create(
             model=model_id,
             messages=history,
             temperature=temperature,
@@ -55,9 +45,8 @@ async def generate_chat(user_msg, history, model_id, temperature, max_tokens, sy
 
 
 def refresh_models():
-    """Clear cache and update the dropdown choices."""
-    _MODELS_CACHE["timestamp"] = 0
-    return gr.update(choices=asyncio.run(fetch_models()))
+    """Update the model dropdown choices."""
+    return gr.update(choices=fetch_models())
 
 
 def clear_chat():
@@ -73,7 +62,7 @@ def build_ui() -> gr.Blocks:
         with gr.Row():
             with gr.Column(scale=1, min_width=260):
                 with gr.Accordion("Parameters", open=True):
-                    model_dropdown = gr.Dropdown(label="Model", choices=asyncio.run(fetch_models()))
+                    model_dropdown = gr.Dropdown(label="Model", choices=fetch_models())
                     temperature_slider = gr.Slider(0.1, 1.5, value=0.7, step=0.1, label="Temperature")
                     max_tokens_slider = gr.Slider(64, 2048, value=512, step=64, label="Max Tokens")
                     system_prompt_box = gr.Textbox(
@@ -92,7 +81,7 @@ def build_ui() -> gr.Blocks:
         state = gr.State([])
 
         user_message.submit(
-            lambda *args: asyncio.run(generate_chat(*args)),
+            generate_chat,
             inputs=[user_message, state, model_dropdown, temperature_slider, max_tokens_slider, system_prompt_box],
             outputs=[chatbot, state],
         )
