@@ -12,8 +12,9 @@ It now supports message editing, regenerating the last response and several adva
    ```
 2. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
+   pip install --upgrade "gradio>=4.44.1,<5" -r requirements.txt
    ```
+   This project requires **Gradio 4.x**. The command above installs the latest 4.x release.
 3. **Run the app**
    ```bash
    python app.py

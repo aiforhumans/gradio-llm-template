@@ -171,6 +171,7 @@ def build_ui() -> gr.Blocks:
                     )
                     refresh_button = gr.Button("🔄 Refresh Models")
             with gr.Column(scale=3):
+                # NOTE: this app expects `type="messages"` (Gradio 4+) for message objects
                 chatbot = gr.Chatbot(
                     label="Chat", type="messages", resizable=True, editable="all"
                 )
