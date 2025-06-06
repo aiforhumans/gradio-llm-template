@@ -1,56 +1,21 @@
----
-title: test
-app_file: app.py
-sdk: gradio
-sdk_version: 5.22.0
----
-# 🧠 Gradio LLM Local Project
+# Optimized LLM Chat App
 
-This project uses Gradio to build local user interfaces for LLMs like those run in LM Studio or Ollama.
+This project provides a simple Gradio interface to chat with a local language model served via LM Studio. It uses asynchronous requests for improved responsiveness and caches the available model list.
 
----
+## Setup
 
-## 🛠️ Setup Instructions
+1. **Create a virtual environment**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Run the app**
+   ```bash
+   python app.py
+   ```
 
-### 1. Clone the project
-
-```bash
-git clone https://github.com/yourusername/gradio-llm-project.git
-cd gradio-llm-project
-```
-
-### 2. Create a virtual environment
-
-```bash
-python -m venv .venv
-```
-
-### 3. Activate the virtual environment
-
-- **Windows:**
-  ```bash
-  .venv\Scripts\activate
-  ```
-- **Mac/Linux:**
-  ```bash
-  source .venv/bin/activate
-  ```
-
-### 4. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Run the Gradio app
-
-```bash
-python app.py
-```
-
----
-
-## ✅ Notes
-
-- Keep `.venv/` out of version control
-- Add new packages with `pip install <package>` and update `requirements.txt` with `pip freeze > requirements.txt`
+The LM Studio server URL can be configured with the `LM_STUDIO_URL` environment variable. The default is `http://localhost:1234/v1`.
