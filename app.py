@@ -34,15 +34,26 @@ def generate_chat(
     seed,
 ):
     """Generate a response from the model and update history."""
-    if not any(msg.get("role") == "system" for msg in history):
-        history.insert(0, {"role": "system", "content": system_prompt})
 
-    history.append({"role": "user", "content": user_msg})
+    def role_of(msg):
+        return msg.role if hasattr(msg, "role") else msg.get("role")
+
+    if not any(role_of(msg) == "system" for msg in history):
+        history.insert(0, gr.ChatMessage(role="system", content=system_prompt))
+
+    history.append(gr.ChatMessage(role="user", content=user_msg))
 
     try:
+        api_messages = [
+            {
+                "role": role_of(m),
+                "content": m.content if hasattr(m, "content") else m.get("content"),
+            }
+            for m in history
+        ]
         response = client.chat.completions.create(
             model=model_id,
-            messages=history,
+            messages=api_messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
@@ -55,7 +66,7 @@ def generate_chat(
     except Exception as exc:  # noqa: BLE001
         assistant_msg = f"❌ Error: {exc}"
 
-    history.append({"role": "assistant", "content": assistant_msg})
+    history.append(gr.ChatMessage(role="assistant", content=assistant_msg))
     return history, history
 
 
@@ -74,16 +85,26 @@ def regenerate_last(
     if not history:
         return history, history
 
-    if history[-1].get("role") == "assistant":
+    def role_of(msg):
+        return msg.role if hasattr(msg, "role") else msg.get("role")
+
+    if role_of(history[-1]) == "assistant":
         history.pop()
 
-    if not any(msg.get("role") == "system" for msg in history):
-        history.insert(0, {"role": "system", "content": system_prompt})
+    if not any(role_of(msg) == "system" for msg in history):
+        history.insert(0, gr.ChatMessage(role="system", content=system_prompt))
 
     try:
+        api_messages = [
+            {
+                "role": role_of(m),
+                "content": m.content if hasattr(m, "content") else m.get("content"),
+            }
+            for m in history
+        ]
         response = client.chat.completions.create(
             model=model_id,
-            messages=history,
+            messages=api_messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
@@ -96,7 +117,7 @@ def regenerate_last(
     except Exception as exc:  # noqa: BLE001
         assistant_msg = f"❌ Error: {exc}"
 
-    history.append({"role": "assistant", "content": assistant_msg})
+    history.append(gr.ChatMessage(role="assistant", content=assistant_msg))
     return history, history
 
 
@@ -124,11 +145,21 @@ def build_ui() -> gr.Blocks:
             with gr.Column(scale=1, min_width=260):
                 with gr.Accordion("Parameters", open=True):
                     model_dropdown = gr.Dropdown(label="Model", choices=fetch_models())
-                    temperature_slider = gr.Slider(0.1, 1.5, value=0.7, step=0.1, label="Temperature")
-                    max_tokens_slider = gr.Slider(64, 2048, value=512, step=64, label="Max Tokens")
-                    top_p_slider = gr.Slider(0.0, 1.0, value=1.0, step=0.05, label="Top P")
-                    freq_penalty_slider = gr.Slider(-2.0, 2.0, value=0.0, step=0.1, label="Frequency Penalty")
-                    pres_penalty_slider = gr.Slider(-2.0, 2.0, value=0.0, step=0.1, label="Presence Penalty")
+                    temperature_slider = gr.Slider(
+                        0.1, 1.5, value=0.7, step=0.1, label="Temperature"
+                    )
+                    max_tokens_slider = gr.Slider(
+                        64, 2048, value=512, step=64, label="Max Tokens"
+                    )
+                    top_p_slider = gr.Slider(
+                        0.0, 1.0, value=1.0, step=0.05, label="Top P"
+                    )
+                    freq_penalty_slider = gr.Slider(
+                        -2.0, 2.0, value=0.0, step=0.1, label="Frequency Penalty"
+                    )
+                    pres_penalty_slider = gr.Slider(
+                        -2.0, 2.0, value=0.0, step=0.1, label="Presence Penalty"
+                    )
                     seed_number = gr.Number(value=0, precision=0, label="Seed")
                     system_prompt_box = gr.Textbox(
                         label="System Prompt",
@@ -140,8 +171,12 @@ def build_ui() -> gr.Blocks:
                     )
                     refresh_button = gr.Button("🔄 Refresh Models")
             with gr.Column(scale=3):
-                chatbot = gr.Chatbot(label="Chat", type="messages", resizable=True, editable="all")
-                user_message = gr.Textbox(placeholder="Say something", label="Your Message", submit_btn="Send")
+                chatbot = gr.Chatbot(
+                    label="Chat", type="messages", resizable=True, editable="all"
+                )
+                user_message = gr.Textbox(
+                    placeholder="Say something", label="Your Message", submit_btn="Send"
+                )
                 regenerate_button = gr.Button("🔁 Regenerate")
 
         state = gr.State([])
