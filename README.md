@@ -1,6 +1,7 @@
 # Simple LLM Chat App
 
-This project provides a minimal Gradio interface to chat with a local language model served via LM Studio.
+This project provides a minimal Gradio interface to chat with a local language model served via LM Studio.  
+It now supports message editing, regenerating the last response and several advanced tuning parameters.
 
 ## Setup
 
@@ -17,6 +18,8 @@ This project provides a minimal Gradio interface to chat with a local language m
    ```bash
    python app.py
    ```
+
+While chatting you can edit any message and the conversation state will update automatically. Use the "Regenerate" button to re-run the last user request. The parameter panel exposes temperature, top-p, frequency and presence penalties as well as a seed value for repeatable results.
 
 The LM Studio server URL can be configured with the `LM_STUDIO_URL` environment variable. The default is `http://localhost:1234/v1`.
 
