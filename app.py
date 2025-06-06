@@ -1,126 +1,106 @@
 import os
-import functools
-import requests
+import time
+import asyncio
+import httpx
 import gradio as gr
-from openai import OpenAI
+from openai import AsyncOpenAI
 
-"""Gradio interface for chatting with locally hosted LLMs via LM Studio."""
+"""Optimized asynchronous chat interface for local LLMs via LM Studio."""
 
 BASE_URL = os.getenv("LM_STUDIO_URL", "http://localhost:1234/v1")
-API_KEY = os.getenv("LM_STUDIO_KEY", "lm-studio")  # dummy key for compatibility
+API_KEY = os.getenv("LM_STUDIO_KEY", "lm-studio")
 
-# OpenAI client configured for the local LM Studio endpoint
-client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
+client = AsyncOpenAI(base_url=BASE_URL, api_key=API_KEY)
+
+_MODELS_CACHE = {"timestamp": 0.0, "models": []}
 
 
-@functools.lru_cache(maxsize=1)
-def fetch_models():
-    """Return a list of available model IDs from the LM Studio API."""
+async def fetch_models() -> list[str]:
+    """Fetch available model IDs with simple caching."""
+    if time.time() - _MODELS_CACHE["timestamp"] < 60:
+        return _MODELS_CACHE["models"]
     try:
-        response = requests.get(f"{BASE_URL}/models", timeout=10)
-        response.raise_for_status()
-        models = response.json().get("data", [])
-        return [model["id"] for model in models]
+        async with httpx.AsyncClient(timeout=10) as http_client:
+            response = await http_client.get(f"{BASE_URL}/models")
+            response.raise_for_status()
+            models = [m["id"] for m in response.json().get("data", [])]
     except Exception as exc:  # noqa: BLE001
-        return [f"\u26a0\ufe0f Error fetching models: {exc}"]
+        models = [f"⚠️ Error fetching models: {exc}"]
+    _MODELS_CACHE["timestamp"] = time.time()
+    _MODELS_CACHE["models"] = models
+    return models
 
 
-def generate_chat_response(user_message, chat_history, model_id, temperature, max_tokens, system_prompt):
-    """Generate a chat completion and update the chat history."""
-    if not any(msg.get("role") == "system" for msg in chat_history):
-        chat_history.insert(0, {"role": "system", "content": system_prompt})
+async def generate_chat(user_msg, history, model_id, temperature, max_tokens, system_prompt):
+    """Generate a response from the model and update history."""
+    if not any(msg.get("role") == "system" for msg in history):
+        history.insert(0, {"role": "system", "content": system_prompt})
 
-    chat_history.append({"role": "user", "content": user_message})
+    history.append({"role": "user", "content": user_msg})
 
     try:
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model_id,
-            messages=chat_history,
+            messages=history,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=False,
         )
-        assistant_message = response.choices[0].message.content
+        assistant_msg = response.choices[0].message.content
     except Exception as exc:  # noqa: BLE001
-        assistant_message = f"\u274c Error: {exc}"
+        assistant_msg = f"❌ Error: {exc}"
 
-    chat_history.append({"role": "assistant", "content": assistant_message})
-    return chat_history, chat_history
+    history.append({"role": "assistant", "content": assistant_msg})
+    return history, history
 
 
-def clear_models():
-    """Refresh the model dropdown choices."""
-    fetch_models.cache_clear()
-    return gr.update(choices=fetch_models())
+def refresh_models():
+    """Clear cache and update the dropdown choices."""
+    _MODELS_CACHE["timestamp"] = 0
+    return gr.update(choices=asyncio.run(fetch_models()))
 
 
 def clear_chat():
-    """Clear the conversation history and UI."""
+    """Reset the conversation."""
     return [], []
 
 
-def build_ui():
-    """Create the Gradio UI for chatting with a local model."""
-    with gr.Blocks() as demo:
-        gr.Markdown("## \U0001F916 Local LM Studio Chatbot")
+def build_ui() -> gr.Blocks:
+    """Construct the Gradio Blocks interface."""
+    with gr.Blocks(title="Optimized Local Chat") as demo:
+        gr.Markdown("## 🤖 Optimized Local LLM Chat")
 
         with gr.Row():
-            with gr.Column(scale=1, min_width=280):
-                gr.Markdown("### Settings")
-                with gr.Accordion("Model & Parameters", open=True):
-                    model_dropdown = gr.Dropdown(
-                        choices=fetch_models(),
-                        label="Select Model",
-                        interactive=True,
-                    )
-                    temperature_slider = gr.Slider(
-                        minimum=0.1,
-                        maximum=1.5,
-                        value=0.7,
-                        step=0.1,
-                        label="Temperature",
-                    )
-                    max_tokens_slider = gr.Slider(
-                        minimum=64,
-                        maximum=2048,
-                        value=512,
-                        step=64,
-                        label="Max Tokens",
-                    )
-                with gr.Accordion("System Prompt", open=False):
+            with gr.Column(scale=1, min_width=260):
+                with gr.Accordion("Parameters", open=True):
+                    model_dropdown = gr.Dropdown(label="Model", choices=asyncio.run(fetch_models()))
+                    temperature_slider = gr.Slider(0.1, 1.5, value=0.7, step=0.1, label="Temperature")
+                    max_tokens_slider = gr.Slider(64, 2048, value=512, step=64, label="Max Tokens")
                     system_prompt_box = gr.Textbox(
-                        value="You are a helpful AI assistant running locally via LM Studio.",
                         label="System Prompt",
+                        value="You are a helpful assistant running locally.",
                         lines=3,
                         max_lines=5,
                         interactive=True,
                         show_copy_button=True,
                     )
-                clear_button = gr.Button("\ud83d\udd04 Refresh + Clear")
-
+                    refresh_button = gr.Button("🔄 Refresh Models")
             with gr.Column(scale=3):
-                chatbot = gr.Chatbot(type="messages", label="Chat with Local AI")
-                user_message = gr.Textbox(
-                    placeholder="Type your message here...",
-                    label="Your Message",
-                    submit_btn="Send",
-                    autofocus=True,
-                    autoscroll=True,
-                )
+                chatbot = gr.Chatbot(label="Chat")
+                user_message = gr.Textbox(placeholder="Say something", label="Your Message")
 
-        chat_state = gr.State([])
+        state = gr.State([])
 
         user_message.submit(
-            generate_chat_response,
-            inputs=[user_message, chat_state, model_dropdown, temperature_slider, max_tokens_slider, system_prompt_box],
-            outputs=[chatbot, chat_state],
+            lambda *args: asyncio.run(generate_chat(*args)),
+            inputs=[user_message, state, model_dropdown, temperature_slider, max_tokens_slider, system_prompt_box],
+            outputs=[chatbot, state],
         )
-        clear_button.click(clear_models, None, model_dropdown)
-        clear_button.click(clear_chat, None, [chatbot, chat_state])
+        refresh_button.click(refresh_models, None, model_dropdown)
+        refresh_button.click(clear_chat, None, [chatbot, state])
 
     return demo
 
 
 if __name__ == "__main__":
-    app = build_ui()
-    app.launch()
+    build_ui().launch()
