@@ -1,6 +1,6 @@
-# Optimized LLM Chat App
+# Simple LLM Chat App
 
-This project provides a simple Gradio interface to chat with a local language model served via LM Studio. It uses asynchronous requests for improved responsiveness and caches the available model list.
+This project provides a minimal Gradio interface to chat with a local language model served via LM Studio.
 
 ## Setup
 
